@@ -36,9 +36,10 @@ void AccessLog::logMessage(const Message& message, bool full,
 }
 
 ProxyFilter::ProxyFilter(const std::string& stat_prefix, Stats::Scope& scope,
-                         Runtime::Loader& runtime, AccessLogSharedPtr access_log)
+                         Runtime::Loader& runtime, AccessLogSharedPtr access_log,
+                         FaultConfigPtr fault_config)
     : stat_prefix_(stat_prefix), scope_(scope), stats_(generateStats(stat_prefix, scope)),
-      runtime_(runtime), access_log_(access_log) {
+      runtime_(runtime), access_log_(access_log), fault_config_(std::move(fault_config)) {
 
   if (!runtime_.snapshot().featureEnabled("mongo.connection_logging_enabled", 100)) {
     // If we are not logging at the connection level, just release the shared pointer so that we
@@ -239,6 +240,43 @@ Network::FilterStatus ProxyFilter::onWrite(Buffer::Instance& data) {
 
 DecoderPtr ProdProxyFilter::createDecoder(DecoderCallbacks& callbacks) {
   return DecoderPtr{new DecoderImpl(callbacks)};
+}
+
+FaultConfigPtr FaultConfig::create(const Json::Object& json_config) {
+  if (!json_config.hasObject("faults")) {
+    return FaultConfigPtr();
+  }
+
+  FaultConfigPtr fault_config(new FaultConfig());
+
+  const Json::ObjectSharedPtr config_delay = json_config.getObject("delay", true);
+  fault_config->delay_percent_ =
+      static_cast<uint64_t>(config_delay->getInteger("delay_percent", 0));
+  fault_config->duration_ms_ = static_cast<uint64_t>(config_delay->getInteger("duration_ms", 0));
+
+  return fault_config;
+}
+
+Optional<uint64_t> ProxyFilter::delayDuration() {
+  Optional<uint64_t> result;
+
+  if (!fault_config_)
+    return result;
+
+  if (!runtime_.snapshot().featureEnabled("mongo.fault.delay_percent",
+                                          fault_config_->delayPercent())) {
+    return result;
+  }
+
+  uint64_t duration =
+      runtime_.snapshot().getInteger("mongo.fault.delay_duration", fault_config_->delayDuration());
+
+  // Delay only if the duration is > 0ms.
+  if (duration > 0) {
+    result.value(duration);
+  }
+
+  return result;
 }
 
 } // namespace Mongo

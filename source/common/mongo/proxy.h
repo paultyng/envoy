@@ -17,6 +17,7 @@
 
 #include "common/buffer/buffer_impl.h"
 #include "common/common/logger.h"
+#include "common/json/json_loader.h"
 #include "common/mongo/utility.h"
 #include "common/network/filter_impl.h"
 
@@ -73,6 +74,24 @@ private:
 typedef std::shared_ptr<AccessLog> AccessLogSharedPtr;
 
 /**
+ * Mongo Fault configuration.
+ */
+class FaultConfig;
+typedef std::unique_ptr<FaultConfig> FaultConfigPtr;
+
+class FaultConfig {
+public:
+  static FaultConfigPtr create(const Json::Object& json_config);
+
+  uint64_t delayPercent() { return delay_percent_; }
+  uint64_t delayDuration() { return duration_ms_; }
+
+private:
+  uint64_t delay_percent_;
+  uint64_t duration_ms_;
+};
+
+/**
  * A sniffing filter for mongo traffic. The current implementation makes a copy of read/written
  * data, decodes it, and generates stats.
  */
@@ -82,7 +101,7 @@ class ProxyFilter : public Network::Filter,
                     Logger::Loggable<Logger::Id::mongo> {
 public:
   ProxyFilter(const std::string& stat_prefix, Stats::Scope& scope, Runtime::Loader& runtime,
-              AccessLogSharedPtr access_log);
+              AccessLogSharedPtr access_log, FaultConfigPtr fault_config);
   ~ProxyFilter();
 
   virtual DecoderPtr createDecoder(DecoderCallbacks& callbacks) PURE;
@@ -138,6 +157,8 @@ private:
   void doDecode(Buffer::Instance& buffer);
   void logMessage(Message& message, bool full);
 
+  Optional<uint64_t> delayDuration();
+
   std::unique_ptr<Decoder> decoder_;
   std::string stat_prefix_;
   Stats::Scope& scope_;
@@ -149,6 +170,8 @@ private:
   std::list<ActiveQueryPtr> active_query_list_;
   AccessLogSharedPtr access_log_;
   Network::ReadFilterCallbacks* read_callbacks_{};
+  FaultConfigPtr fault_config_;
+  // Event::TimerPtr delay_timer_;
 };
 
 class ProdProxyFilter : public ProxyFilter {

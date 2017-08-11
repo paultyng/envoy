@@ -64,7 +64,8 @@ public:
 
     EXPECT_CALL(log_manager_, createAccessLog(_)).WillOnce(Return(file_));
     access_log_.reset(new AccessLog("test", log_manager_));
-    filter_.reset(new TestProxyFilter("test.", store_, runtime_, access_log_));
+    filter_.reset(
+        new TestProxyFilter("test.", store_, runtime_, access_log_, std::move(fault_config_)));
     filter_->initializeReadFilterCallbacks(read_filter_callbacks_);
     filter_->onNewConnection();
   }
@@ -75,6 +76,7 @@ public:
   Event::MockDispatcher dispatcher_;
   std::shared_ptr<Filesystem::MockFile> file_{new NiceMock<Filesystem::MockFile>()};
   AccessLogSharedPtr access_log_;
+  FaultConfigPtr fault_config_;
   std::unique_ptr<TestProxyFilter> filter_;
   NiceMock<Network::MockReadFilterCallbacks> read_filter_callbacks_;
   Envoy::AccessLog::MockAccessLogManager log_manager_;
