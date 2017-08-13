@@ -8,6 +8,7 @@
 
 #include "envoy/access_log/access_log.h"
 #include "envoy/common/time.h"
+#include "envoy/event/timer.h"
 #include "envoy/mongo/codec.h"
 #include "envoy/network/connection.h"
 #include "envoy/network/filter.h"
@@ -101,7 +102,8 @@ class ProxyFilter : public Network::Filter,
                     Logger::Loggable<Logger::Id::mongo> {
 public:
   ProxyFilter(const std::string& stat_prefix, Stats::Scope& scope, Runtime::Loader& runtime,
-              AccessLogSharedPtr access_log, FaultConfigPtr fault_config);
+              AccessLogSharedPtr access_log, FaultConfigPtr fault_config,
+              Event::Dispatcher& dispatcher);
   ~ProxyFilter();
 
   virtual DecoderPtr createDecoder(DecoderCallbacks& callbacks) PURE;
@@ -158,6 +160,9 @@ private:
   void logMessage(Message& message, bool full);
 
   Optional<uint64_t> delayDuration();
+  void postDelayInjection();
+  void destroyTimer();
+  void tryInjectDelays();
 
   std::unique_ptr<Decoder> decoder_;
   std::string stat_prefix_;
@@ -171,7 +176,8 @@ private:
   AccessLogSharedPtr access_log_;
   Network::ReadFilterCallbacks* read_callbacks_{};
   FaultConfigPtr fault_config_;
-  // Event::TimerPtr delay_timer_;
+  Event::Dispatcher& dispatcher_;
+  Event::TimerPtr delay_timer_;
 };
 
 class ProdProxyFilter : public ProxyFilter {

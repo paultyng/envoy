@@ -37,9 +37,10 @@ void AccessLog::logMessage(const Message& message, bool full,
 
 ProxyFilter::ProxyFilter(const std::string& stat_prefix, Stats::Scope& scope,
                          Runtime::Loader& runtime, AccessLogSharedPtr access_log,
-                         FaultConfigPtr fault_config)
+                         FaultConfigPtr fault_config, Event::Dispatcher& dispatcher)
     : stat_prefix_(stat_prefix), scope_(scope), stats_(generateStats(stat_prefix, scope)),
-      runtime_(runtime), access_log_(access_log), fault_config_(std::move(fault_config)) {
+      runtime_(runtime), access_log_(access_log), fault_config_(std::move(fault_config)),
+      dispatcher_(dispatcher) {
 
   if (!runtime_.snapshot().featureEnabled("mongo.connection_logging_enabled", 100)) {
     // If we are not logging at the connection level, just release the shared pointer so that we
@@ -72,6 +73,7 @@ void ProxyFilter::decodeQuery(QueryMessagePtr&& message) {
   stats_.op_query_.inc();
   logMessage(*message, true);
   ENVOY_LOG(debug, "decoded QUERY: {}", message->toString(true));
+  tryInjectDelays();
 
   if (message->flags() & QueryMessage::Flags::TailableCursor) {
     stats_.op_query_tailable_cursor_.inc();
@@ -229,7 +231,8 @@ void ProxyFilter::onEvent(Network::ConnectionEvent event) {
 Network::FilterStatus ProxyFilter::onData(Buffer::Instance& data) {
   read_buffer_.add(data);
   doDecode(read_buffer_);
-  return Network::FilterStatus::Continue;
+
+  return delay_timer_ ? Network::FilterStatus::StopIteration : Network::FilterStatus::Continue;
 }
 
 Network::FilterStatus ProxyFilter::onWrite(Buffer::Instance& data) {
@@ -243,8 +246,8 @@ DecoderPtr ProdProxyFilter::createDecoder(DecoderCallbacks& callbacks) {
 }
 
 FaultConfigPtr FaultConfig::create(const Json::Object& json_config) {
-  if (!json_config.hasObject("faults")) {
-    return FaultConfigPtr();
+  if (!json_config.hasObject("fault")) {
+    return nullptr;
   }
 
   FaultConfigPtr fault_config(new FaultConfig());
@@ -277,6 +280,30 @@ Optional<uint64_t> ProxyFilter::delayDuration() {
   }
 
   return result;
+}
+
+void ProxyFilter::postDelayInjection() {
+  destroyTimer();
+
+  // Continue request processing.
+  read_callbacks_->continueReading();
+}
+
+void ProxyFilter::destroyTimer() {
+  if (delay_timer_) {
+    delay_timer_->disableTimer();
+    delay_timer_.reset();
+  }
+}
+
+void ProxyFilter::tryInjectDelays() {
+  Optional<uint64_t> delay_ms = delayDuration();
+
+  if (delay_ms.valid() && delay_ms.value() > 0UL) {
+    delay_timer_ = dispatcher_.createTimer([this]() -> void { postDelayInjection(); });
+    delay_timer_->enableTimer(std::chrono::milliseconds(delay_ms.value()));
+    // recordDelaysInjectedStats();
+  }
 }
 
 } // namespace Mongo
