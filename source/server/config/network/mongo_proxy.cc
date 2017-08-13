@@ -27,8 +27,9 @@ MongoProxyFilterConfigFactory::createFilterFactory(const Json::Object& config,
   FaultConfigPtr fault_config = FaultConfig::create(config);
 
   return [stat_prefix, &context, access_log](Network::FilterManager& filter_manager) -> void {
-    filter_manager.addFilter(Network::FilterSharedPtr{new Mongo::ProdProxyFilter(
-        stat_prefix, context.scope(), context.runtime(), access_log, std::move(fault_config))});
+    filter_manager.addFilter(Network::FilterSharedPtr{
+        new Mongo::ProdProxyFilter(stat_prefix, context.scope(), context.runtime(), access_log,
+                                   std::move(fault_config), context.server().dispatcher())});
   };
 }
 
