@@ -52,9 +52,7 @@ public:
   DecoderCallbacks* callbacks_{};
 };
 
-class Test
-
-    class MongoProxyFilterTest : public testing::Test {
+class MongoProxyFilterTest : public testing::Test {
 public:
   MongoProxyFilterTest() {
     ON_CALL(runtime_.snapshot_, featureEnabled("mongo.proxy_enabled", 100))
