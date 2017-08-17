@@ -32,6 +32,7 @@ namespace Mongo {
 // clang-format off
 #define ALL_MONGO_PROXY_STATS(COUNTER, GAUGE, TIMER)                                               \
   COUNTER(decoding_error)                                                                          \
+  COUNTER(delays_injected)                                                                         \
   COUNTER(op_get_more)                                                                             \
   COUNTER(op_insert)                                                                               \
   COUNTER(op_kill_cursors)                                                                         \

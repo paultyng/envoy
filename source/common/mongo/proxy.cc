@@ -302,7 +302,7 @@ void ProxyFilter::tryInjectDelays() {
   if (delay_ms.valid() && delay_ms.value() > 0UL) {
     delay_timer_ = dispatcher_.createTimer([this]() -> void { postDelayInjection(); });
     delay_timer_->enableTimer(std::chrono::milliseconds(delay_ms.value()));
-    // recordDelaysInjectedStats();
+    stats_.delays_injected_.inc();
   }
 }
 

@@ -373,7 +373,6 @@ const std::string Json::Schema::MONGO_PROXY_NETWORK_FILTER_SCHEMA(R"EOF(
               "fixed_duration_ms" : {
                 "type" : "integer",
                 "minimum" : 0,
-                "exclusiveMinimum" : true
               }
             },
             "required" : ["fixed_delay_percent", "fixed_duration_ms"],
